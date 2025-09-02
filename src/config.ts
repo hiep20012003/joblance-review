@@ -3,6 +3,10 @@ import dotenv from 'dotenv';
 dotenv.config({ path: `.env.${process.env.ENVIRONMENT || 'dev'}` });
 
 class Config {
+  public DATABASE_HOST: string | undefined;
+  public DATABASE_USER: string | undefined;
+  public DATABASE_PASSWORD: string | undefined;
+  public DATABASE_NAME: string | undefined;
   public GATEWAY_JWT_TOKEN: string;
   public PORT: string;
   public JWT_TOKEN: string;
@@ -12,6 +16,10 @@ class Config {
   public ELASTIC_SEARCH_URL: string;
 
   constructor() {
+    this.DATABASE_HOST = process.env.DATABASE_HOST || '';
+    this.DATABASE_USER = process.env.DATABASE_USER || '';
+    this.DATABASE_PASSWORD = process.env.DATABASE_PASSWORD || '';
+    this.DATABASE_NAME = process.env.DATABASE_NAME || '';    
     this.GATEWAY_JWT_TOKEN = process.env.GATEWAY_JWT_TOKEN || '';
     this.PORT = process.env.PORT || '';
     this.JWT_TOKEN = process.env.JWT_TOKEN || '';
