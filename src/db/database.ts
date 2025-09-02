@@ -1,14 +1,12 @@
-import { winstonLogger } from '@hiep20012003/joblance-shared';
-import { Logger } from 'winston';
 import { config } from '@review/config';
 import { Pool, PoolClient } from 'pg';
+import { AppLogger } from '@review/utils/logger';
+import { ServerError } from '@hiep20012003/joblance-shared';
 
 export class Database {
   private pool: Pool;
-  private log: Logger;
 
   constructor() {
-    this.log = winstonLogger(`${config.ELASTIC_SEARCH_URL}`, 'reviewDatabaseServer', 'debug');
     this.pool = new Pool({
       host: config.DATABASE_HOST,
       user: config.DATABASE_USER,
@@ -23,8 +21,11 @@ export class Database {
     });
 
     this.pool.on('error', (error: Error) => {
-      this.log.log('error', 'pg client error', error);
-      process.exit(-1);
+      throw new ServerError({
+        clientMessage: 'Unexpected database error',
+        cause: error,
+        operation: 'database:pool_error'
+      });
     });
   }
 
@@ -54,7 +55,7 @@ export class Database {
     `;
 
     await this.pool.query(createTableText);
-    this.log.info('Review table ensured in PostgreSQL database.');
+    AppLogger.info('Review table and indexes ensured in PostgreSQL database.', { operation: 'database:init' });
   }
 
   /**
@@ -63,12 +64,15 @@ export class Database {
   public async connect(): Promise<void> {
     try {
       const client: PoolClient = await this.pool.connect();
-      this.log.info('Review service successfully connected to PostgreSQL database.');
+      AppLogger.info('Successfully connected to PostgreSQL database.', { operation: 'database:connect' });
       client.release();
       await this.init();
     } catch (error) {
-      this.log.error('ReviewService - Unable to connect to database');
-      this.log.log('error', 'ReviewService connect() method error:', error);
+      throw new ServerError({
+        clientMessage: 'Unable to connect to database',
+        cause: error,
+        operation: 'database:connect_error'
+      });
     }
   }
 
@@ -78,9 +82,13 @@ export class Database {
   public async close(): Promise<void> {
     try {
       await this.pool.end();
-      this.log.info('Database connection closed.');
+      AppLogger.info('PostgreSQL database connection closed.', { operation: 'database:close' });
     } catch (error) {
-      this.log.error('Error while closing database connection:', error);
+      throw new ServerError({
+        clientMessage: 'Error while closing database connection',
+        cause: error,
+        operation: 'database:close_error'
+      });
     }
   }
 

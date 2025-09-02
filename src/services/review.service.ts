@@ -1,13 +1,9 @@
-import { pool } from '@review/db/database';
-import { publishFanoutMessage } from '@review/queues/review.producer';
-import { reviewChannel } from '@review/server';
-import { IReviewDocument, IReviewMessageDetails } from '@hiep20012003/joblance-shared';
-import { map } from 'lodash';
+import { database } from '@review/db/database';
+import { messageQueue, publishChannel } from '@review/queues/connection';
+import { IReviewDocument, IReviewerObjectKeys, IReviewMessageDetails } from '@review/types/review';
+import { ExchangeType } from '@hiep20012003/joblance-shared';
 import { QueryResult } from 'pg';
-
-interface IReviewerObjectKeys {
-  [key: string]: string | number | Date | undefined;
-}
+import { AppLogger } from '@review/utils/logger';
 
 export class ReviewService {
   private objKeys: IReviewerObjectKeys = {
@@ -45,10 +41,10 @@ export class ReviewService {
 
     const createdAtDate = new Date();
 
-    const { rows } = await pool.query(
+    const { rows } = await database.getPool().query<IReviewDocument>(
       `INSERT INTO reviews(gigId, reviewerId, reviewerImage, sellerId, review, rating, orderId, reviewType, reviewerUsername, country, createdAt)
-        VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-        RETURNING *`,
+      VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      RETURNING *`,
       [gigId, reviewerId, reviewerImage, sellerId, review, rating, orderId, reviewType, reviewerUsername, country, createdAtDate]
     );
 
@@ -59,18 +55,20 @@ export class ReviewService {
       review,
       rating,
       orderId,
-      createdAt: `${createdAtDate}`,
-      type: `${reviewType}`
+      createdAt: createdAtDate.toISOString(),
+      type: reviewType as string
     };
+    await messageQueue.publish(publishChannel, 'jobber-review', '', JSON.stringify(messageDetails), ExchangeType.Fanout);
 
-    await publishFanoutMessage(
-      reviewChannel,
-      'jobber-review',
-      JSON.stringify(messageDetails),
-      'Review details sent to order and users services'
-    );
+    AppLogger.info('Review details sent to order and users services', { operation: 'queue:publish' });
 
-    return this.mapRowToReview(rows[0]);
+    const result: IReviewDocument = Object.fromEntries(
+      Object.entries(rows[0]).map(
+        ([key, value]) => [this.objKeys[key as keyof IReviewerObjectKeys] || key, value]
+      )
+    ) as IReviewDocument;
+
+    return result;
   }
 
   /**
@@ -79,8 +77,22 @@ export class ReviewService {
    * @returns Danh sách review
    */
   public async getReviewsByGigId(gigId: string): Promise<IReviewDocument[]> {
-    const reviews: QueryResult = await pool.query('SELECT * FROM reviews WHERE reviews.gigId = $1', [gigId]);
-    return map(reviews.rows, (row) => this.mapRowToReview(row));
+    const reviews = await database
+      .getPool()
+      .query<Record<string, unknown>>(
+        'SELECT * FROM reviews WHERE reviews.gigId = $1',
+        [gigId]
+      );
+
+    return reviews.rows.map((row) => {
+      const result: IReviewDocument = Object.fromEntries(
+        Object.entries(row).map(
+          ([key, value]) => [this.objKeys[key as keyof IReviewerObjectKeys] || key, value]
+        )
+      ) as IReviewDocument;
+
+      return result;
+    });
   }
 
   /**
@@ -89,21 +101,20 @@ export class ReviewService {
    * @returns Danh sách review
    */
   public async getReviewsBySellerId(sellerId: string): Promise<IReviewDocument[]> {
-    const reviews: QueryResult = await pool.query(
+    const reviews: QueryResult<Record<string, unknown>> = await database.getPool().query<Record<string, unknown>>(
       'SELECT * FROM reviews WHERE reviews.sellerId = $1 AND reviews.reviewType = $2',
       [sellerId, 'seller-review']
     );
-    return map(reviews.rows, (row) => this.mapRowToReview(row));
-  }
+    return reviews.rows.map((row) => {
+      const result: IReviewDocument = Object.fromEntries(
+        Object.entries(row).map(
+          ([key, value]) => [this.objKeys[key as keyof IReviewerObjectKeys] || key, value]
+        )
+      ) as IReviewDocument;
 
-  /**
-   * Map dữ liệu từ DB sang định dạng chuẩn
-   * @param row Dữ liệu từ DB
-   * @returns IReviewDocument
-   */
-  private mapRowToReview(row: Record<string, any>): IReviewDocument {
-    return Object.fromEntries(
-      Object.entries(row).map(([key, value]) => [this.objKeys[key] || key, value])
-    ) as IReviewDocument;
+      return result;
+    });
   }
 }
+
+export const reviewService: ReviewService = new ReviewService();

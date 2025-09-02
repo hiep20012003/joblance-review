@@ -4,6 +4,9 @@ dotenv.config({ path: `.env.${process.env.ENVIRONMENT || 'dev'}` });
 
 class Config {
   public DATABASE_HOST: string | undefined;
+  public CLUSTER_TYPE: string | undefined;
+  public REDIS_HOST: string | undefined;
+  public RABBITMQ_ENDPOINT: string | undefined;
   public DATABASE_USER: string | undefined;
   public DATABASE_PASSWORD: string | undefined;
   public DATABASE_NAME: string | undefined;
@@ -17,7 +20,10 @@ class Config {
 
   constructor() {
     this.DATABASE_HOST = process.env.DATABASE_HOST || '';
+    this.CLUSTER_TYPE = process.env.CLUSTER_TYPE || '';
+    this.REDIS_HOST = process.env.REDIS_HOST || '';
     this.DATABASE_USER = process.env.DATABASE_USER || '';
+    this.RABBITMQ_ENDPOINT = process.env.RABBITMQ_ENDPOINT || '';
     this.DATABASE_PASSWORD = process.env.DATABASE_PASSWORD || '';
     this.DATABASE_NAME = process.env.DATABASE_NAME || '';    
     this.GATEWAY_JWT_TOKEN = process.env.GATEWAY_JWT_TOKEN || '';

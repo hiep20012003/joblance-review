@@ -1,5 +1,5 @@
-import { review } from '@review/controllers/create';
-import { reviewsByGigId, reviewsBySellerId } from '@review/controllers/get';
+import { review } from '@review/controllers/create.controller';
+import { reviewsByGigId, reviewsBySellerId } from '@review/controllers/get.controller';
 import express, { Router } from 'express';
 
 const router: Router = express.Router();

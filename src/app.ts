@@ -1,9 +1,6 @@
 import express, { Express } from 'express';
 import { ReviewServer } from '@review/server';
 import { AppLogger } from '@review/utils/logger';
-
-import { database } from './db/database';
-
 class Application {
   private app: Express;
   private server: ReviewServer;
@@ -17,7 +14,6 @@ class Application {
     const operation = 'app:init';
 
     try {
-      await database.connect();
       await this.server.start();
       AppLogger.info('Review Service initialized', { operation });
     } catch (error) {

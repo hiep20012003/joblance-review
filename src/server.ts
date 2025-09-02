@@ -18,6 +18,8 @@ import jwt, { JwtPayload } from 'jsonwebtoken';
 import { config } from '@review/config';
 
 import { appRoutes } from './routes';
+import { database } from './db/database';
+import { initQueue } from './queues/connection';
 
 const SERVER_PORT = config.PORT || 4003;
 
@@ -29,11 +31,12 @@ export class ReviewServer {
   }
 
   public async start(): Promise<void> {
+    await database.connect();
+    await this.startQueues();
 
     this.securityMiddleware(this.app);
     this.standarMiddleware(this.app);
     this.routesMiddleware(this.app);
-    await this.startQueues();
     this.startRedis();
     this.errorHandler(this.app);
     this.startServer(this.app);
@@ -72,7 +75,8 @@ export class ReviewServer {
   }
 
   private async startQueues(): Promise<void> {
-    //authChannel = (await createConnection()) as Channel;
+    await initQueue();
+    //reviewChannel = (await createConnection()) as Channel;
   }
 
   private startRedis() {
