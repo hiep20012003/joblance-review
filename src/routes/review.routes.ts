@@ -1,15 +1,18 @@
-import { review } from '@review/controllers/create.controller';
-import { reviewsByGigId, reviewsBySellerId } from '@review/controllers/get.controller';
 import express, { Router } from 'express';
+import { reviewController } from '@review/controllers/review.controller';
 
-const router: Router = express.Router();
+class ReviewRoutes {
+  private router: Router;
+  constructor() {
+    this.router = express.Router();
+  }
 
-const reviewRoutes = (): Router => {
-  router.get('/gig/:gigId', reviewsByGigId);
-  router.get('/seller/:sellerId', reviewsBySellerId);
-  router.post('/', review);
+  public routes(): Router {
+    this.router.get('/gig/:gigId', reviewController.reviewsByGigId);
+    this.router.get('/seller/:sellerId', reviewController.reviewsBySellerId);
+    this.router.post('/', reviewController.review);
+    return this.router;
+  }
+}
 
-  return router;
-};
-
-export { reviewRoutes };
+export const reviewRoutes: ReviewRoutes = new ReviewRoutes();

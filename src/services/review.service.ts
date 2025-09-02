@@ -1,8 +1,6 @@
 import { database } from '@review/db/database';
 import { messageQueue, publishChannel } from '@review/queues/connection';
-import { IReviewDocument, IReviewerObjectKeys, IReviewMessageDetails } from '@review/types/review';
-import { ExchangeType } from '@hiep20012003/joblance-shared';
-import { QueryResult } from 'pg';
+import { IReviewDocument, IReviewerObjectKeys, IReviewMessage, ExchangeType, MessageQueueType } from '@hiep20012003/joblance-shared';
 import { AppLogger } from '@review/utils/logger';
 
 export class ReviewService {
@@ -20,11 +18,6 @@ export class ReviewService {
     reviewtype: 'reviewType'
   };
 
-  /**
-   * Thêm một review mới
-   * @param data Thông tin review
-   * @returns IReviewDocument
-   */
   public async addReview(data: IReviewDocument): Promise<IReviewDocument> {
     const {
       gigId,
@@ -48,7 +41,7 @@ export class ReviewService {
       [gigId, reviewerId, reviewerImage, sellerId, review, rating, orderId, reviewType, reviewerUsername, country, createdAtDate]
     );
 
-    const messageDetails: IReviewMessageDetails = {
+    const message: IReviewMessage = {
       gigId,
       reviewerId,
       sellerId,
@@ -56,9 +49,9 @@ export class ReviewService {
       rating,
       orderId,
       createdAt: createdAtDate.toISOString(),
-      type: reviewType as string
+      type: reviewType as MessageQueueType
     };
-    await messageQueue.publish(publishChannel, 'jobber-review', '', JSON.stringify(messageDetails), ExchangeType.Fanout);
+    await messageQueue.publish(publishChannel, 'jobber-review', '', JSON.stringify(message), ExchangeType.Fanout);
 
     AppLogger.info('Review details sent to order and users services', { operation: 'queue:publish' });
 
@@ -71,11 +64,6 @@ export class ReviewService {
     return result;
   }
 
-  /**
-   * Lấy danh sách review theo gigId
-   * @param gigId ID của gig
-   * @returns Danh sách review
-   */
   public async getReviewsByGigId(gigId: string): Promise<IReviewDocument[]> {
     const reviews = await database
       .getPool()
@@ -95,13 +83,8 @@ export class ReviewService {
     });
   }
 
-  /**
-   * Lấy danh sách review theo sellerId (chỉ các review type = seller-review)
-   * @param sellerId ID của seller
-   * @returns Danh sách review
-   */
   public async getReviewsBySellerId(sellerId: string): Promise<IReviewDocument[]> {
-    const reviews: QueryResult<Record<string, unknown>> = await database.getPool().query<Record<string, unknown>>(
+    const reviews = await database.getPool().query<Record<string, unknown>>(
       'SELECT * FROM reviews WHERE reviews.sellerId = $1 AND reviews.reviewType = $2',
       [sellerId, 'seller-review']
     );

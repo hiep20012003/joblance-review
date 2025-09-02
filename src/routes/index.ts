@@ -8,7 +8,7 @@ const BASE_PATH = '/api/v1/review';
 
 const appRoutes = (app: Application): void => {
   app.use('', healthRoutes.routes());
-  app.use(BASE_PATH, createVerifyGatewayRequest, reviewRoutes);
+  app.use(BASE_PATH, createVerifyGatewayRequest, reviewRoutes.routes());
 };
 
 export { appRoutes };
