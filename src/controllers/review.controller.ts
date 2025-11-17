@@ -1,38 +1,42 @@
-import { Request, Response } from 'express';
-import { StatusCodes, ReasonPhrases } from 'http-status-codes';
-import { IReviewDocument, SuccessResponse } from '@hiep20012003/joblance-shared';
-import { reviewService } from '@review/services/review.service';
+import {Request, Response} from 'express';
+import {StatusCodes, ReasonPhrases} from 'http-status-codes';
+import {IReviewDocument, SuccessResponse} from '@hiep20012003/joblance-shared';
+import {reviewService} from '@reviews/services/review.service';
+import {AddReviewSchema, QueryReviewsSchema, ReplyReviewSchema} from '@reviews/schemas/reviews.schema';
 
 class ReviewController {
-  reviewsByGigId = async (req: Request, res: Response): Promise<void> => {
-    const reviews: IReviewDocument[] = await reviewService.getReviewsByGigId(req.params.gigId);
-    new SuccessResponse({
-      message: 'User created successfully',
-      statusCode: StatusCodes.CREATED,
-      reasonPhrase: ReasonPhrases.CREATED,
-      metadata: { reviews }
-    }).send(res);
-  };
-  
-  reviewsBySellerId = async (req: Request, res: Response): Promise<void> => {
-    const reviews: IReviewDocument[] = await reviewService.getReviewsBySellerId(req.params.sellerId);
-    new SuccessResponse({
-      message: 'User created successfully',
-      statusCode: StatusCodes.CREATED,
-      reasonPhrase: ReasonPhrases.CREATED,
-      metadata: { reviews }
-    }).send(res);
-  };
+    queryReviews = async (req: Request, res: Response): Promise<void> => {
+        const validatedQuery: QueryReviewsSchema = req.validatedQuery;
+        const reviews: IReviewDocument[] = await reviewService.queryReviews(validatedQuery);
+        new SuccessResponse({
+            message: 'Reviews fetched successfully',
+            statusCode: StatusCodes.OK,
+            reasonPhrase: ReasonPhrases.OK,
+            data: reviews
+        }).send(res);
+    };
 
-  review = async (req: Request, res: Response): Promise<void> => {
-    const review: IReviewDocument = await reviewService.addReview(req.body as IReviewDocument);
-    new SuccessResponse({
-      message: 'User created successfully',
-      statusCode: StatusCodes.CREATED,
-      reasonPhrase: ReasonPhrases.CREATED,
-      metadata: { review }
-    }).send(res);
-  };
+    review = async (req: Request, res: Response): Promise<void> => {
+        const validatedBody: AddReviewSchema = req.body as AddReviewSchema;
+        const review: IReviewDocument = await reviewService.addReview(validatedBody);
+        new SuccessResponse({
+            message: 'Review created successfully',
+            statusCode: StatusCodes.CREATED,
+            reasonPhrase: ReasonPhrases.CREATED,
+            data: review
+        }).send(res);
+    };
+
+    replyReview = async (req: Request, res: Response): Promise<void> => {
+        const validatedBody: ReplyReviewSchema = req.body as ReplyReviewSchema;
+        const review: IReviewDocument = await reviewService.replyReview(validatedBody);
+        new SuccessResponse({
+            message: 'Review replied successfully',
+            statusCode: StatusCodes.OK,
+            reasonPhrase: ReasonPhrases.OK,
+            data: review
+        }).send(res);
+    };
 }
 
 export const reviewController = new ReviewController();
