@@ -1,6 +1,6 @@
 import http from 'http';
 
-import { AppLogger } from '@review/utils/logger';
+import { AppLogger } from '@reviews/utils/logger';
 import { Application, json, NextFunction, urlencoded, Request, Response } from 'express';
 import {
   ApplicationError,
@@ -14,16 +14,16 @@ import hpp from 'hpp';
 import cors from 'cors';
 import compression from 'compression';
 import helmet from 'helmet';
-import jwt, { JwtPayload } from 'jsonwebtoken';
-import { config } from '@review/config';
+import { config } from '@reviews/config';
+import { database } from '@reviews/database/connection';
+import { cacheStore } from '@reviews/cache/redis.connection';
 
 import { appRoutes } from './routes';
-import { database } from './db/database';
 import { initQueue } from './queues/connection';
 
-const SERVER_PORT = config.PORT || 4003;
+const SERVER_PORT = config.PORT || 4007;
 
-export class ReviewServer {
+export class ReviewsServer {
   private app: Application;
 
   constructor(app: Application) {
@@ -35,7 +35,7 @@ export class ReviewServer {
     await this.startQueues();
 
     this.securityMiddleware(this.app);
-    this.standarMiddleware(this.app);
+    this.standardMiddleware(this.app);
     this.routesMiddleware(this.app);
     this.startRedis();
     this.errorHandler(this.app);
@@ -53,18 +53,9 @@ export class ReviewServer {
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
       })
     );
-
-    app.use((req: Request, _res: Response, next: NextFunction) => {
-      if (req.headers.authorization) {
-        const token = req.headers.authorization.split(' ')[1];
-        const payload = jwt.decode(token);
-        req.currentUser = payload as JwtPayload;
-      }
-      next();
-    });
   }
 
-  private standarMiddleware(app: Application): void {
+  private standardMiddleware(app: Application): void {
     app.use(compression());
     app.use(json({ limit: '200mb' }));
     app.use(urlencoded({ extended: true, limit: '200mb' }));
@@ -76,35 +67,33 @@ export class ReviewServer {
 
   private async startQueues(): Promise<void> {
     await initQueue();
-    //reviewChannel = (await createConnection()) as Channel;
   }
 
   private startRedis() {
-    //cacheStore.connect();
+    cacheStore.connect();
   }
 
   private errorHandler(app: Application): void {
     app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
       const operation = 'server:handle-error';
 
-      AppLogger.error(
-        `API ${req.originalUrl} unexpected error`,
-        {
-          req,
-          operation,
-          error: err instanceof ApplicationError ? err.serialize() : {
-            name: (err as Error).name,
-            message: (err as Error).message,
-            stack: (err as Error).stack,
-          }
-        }
-      );
+      AppLogger.error(`API ${req.originalUrl} unexpected error`, {
+        operation,
+        error:
+          err instanceof ApplicationError
+            ? err.serialize()
+            : {
+              name: (err as Error).name,
+              message: (err as Error).message,
+              stack: (err as Error).stack
+            }
+      });
 
       if (err instanceof ApplicationError) {
         new ErrorResponse({
-          ...err.serializeForClient() as ResponseOptions,
-          error: new RegExp('validate', 'i').test(err?.operation as string) ? err.context : undefined
-        }).send(res);
+          ...(err.serializeForClient() as ResponseOptions),
+
+        }).send(res, true);
       } else {
         const serverError = new ServerError({
           clientMessage: 'Internal server error',
@@ -112,8 +101,8 @@ export class ReviewServer {
           operation
         });
         new ErrorResponse({
-          ...serverError.serializeForClient() as ResponseOptions
-        }).send(res);
+          ...(serverError.serializeForClient() as ResponseOptions)
+        }).send(res, true);
       }
     });
 
@@ -126,21 +115,20 @@ export class ReviewServer {
         operation
       });
 
-      AppLogger.error(
-        `API ${req.originalUrl} route not found`,
-        {
-          req,
-          operation,
-          error: err instanceof ApplicationError ? err.serialize() : {
-            name: (err as Error).name,
-            message: (err as Error).message,
-            stack: (err as Error).stack,
-          }
-        }
-      );
+      AppLogger.error(`API ${req.originalUrl} route not found`, {
+        operation,
+        error:
+          err instanceof ApplicationError
+            ? err.serialize()
+            : {
+              name: (err as Error).name,
+              message: (err as Error).message,
+              stack: (err as Error).stack
+            }
+      });
       new ErrorResponse({
-        ...err.serializeForClient() as ResponseOptions
-      }).send(res);
+        ...(err.serializeForClient() as ResponseOptions)
+      }).send(res, true);
     });
   }
 

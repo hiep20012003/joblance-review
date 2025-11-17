@@ -1,14 +1,14 @@
-import { healthController } from '@review/controllers/health.controller';
+import { healthController } from '@reviews/controllers/health.controller';
 import express, { Router } from 'express';
 
 class HealthRoutes {
-  private router: Router;
+  private readonly router: Router;
   constructor() {
     this.router = express.Router();
   }
 
   public routes(): Router {
-    this.router.get('/review-health', healthController.health);
+    this.router.get('/health', healthController.health);
     return this.router;
   }
 }
