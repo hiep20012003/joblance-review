@@ -22,8 +22,8 @@
     "seed:create": "dotenv -- node scripts/seed create --folder src/db/seeders"
   },
   "dependencies": {
-    "@hiep20012003/joblance-shared": "latest",
     "@elastic/opentelemetry-node": "^1.6.0",
+    "@hiep20012003/joblance-shared": "^0.0.4",
     "axios": "^1.11.0",
     "compression": "^1.8.1",
     "cors": "^2.8.5",

@@ -1,15 +1,10 @@
-import {Request, Response} from 'express';
-import {StatusCodes, ReasonPhrases} from 'http-status-codes';
-import {SuccessResponse} from '@hiep20012003/joblance-shared';
+import { Request, Response } from 'express';
+import { StatusCodes } from 'http-status-codes';
 
 class HealthController {
-    public health = (_req: Request, res: Response): void => {
-        new SuccessResponse({
-            message: 'User created successfully',
-            statusCode: StatusCodes.OK,
-            reasonPhrase: ReasonPhrases.OK,
-        }).send(res);
-    };
+  public health = (_req: Request, res: Response): void => {
+    res.status(StatusCodes.OK).send('Review Service is healthy and OK');
+  };
 }
 
 export const healthController = new HealthController();
