@@ -1,118 +1,105 @@
-import { config } from '@reviews/config';
-import mysql, { Pool, PoolConnection } from 'mysql2/promise';
-import { AppLogger } from '@reviews/utils/logger';
-import { ServerError } from '@hiep20012003/joblance-shared';
+import {config} from '@reviews/config';
+import {Pool, PoolClient} from 'pg';
+import {AppLogger} from '@reviews/utils/logger';
+import {ServerError} from '@hiep20012003/joblance-shared';
 
 export class Database {
-  private readonly pool: Pool;
+    private readonly pool: Pool;
 
-  constructor() {
-    this.pool = mysql.createPool({
-      uri: config.DATABASE_URL,
-      waitForConnections: true,
-      connectionLimit: 10,
-      queueLimit: 0,
-      timezone: '+07:00',
-      supportBigNumbers: true,
-      bigNumberStrings: true,
-      multipleStatements: true,
-    });
-  }
+    constructor() {
+        this.pool = new Pool({
+            connectionString: `${config.DATABASE_URL}`,
+        });
 
-  private async init(): Promise<void> {
-    const createTableSQL = `
-            CREATE TABLE IF NOT EXISTS reviews (
-                                                   id                VARCHAR(36) PRIMARY KEY,
-                                                   gig_id            VARCHAR(36) NOT NULL,
-                                                   order_id          VARCHAR(36) NOT NULL,
-                                                   target_id         VARCHAR(36) NOT NULL,
-                                                   target_username   VARCHAR(100) NOT NULL,
-                                                   target_picture    TEXT,
-                                                   reviewer_id       VARCHAR(36) NOT NULL,
-                                                   reviewer_username VARCHAR(100) NOT NULL,
-                                                   reviewer_picture  TEXT,
-                                                   review            TEXT NOT NULL,
-                                                   review_type       VARCHAR(50) NOT NULL,
-                                                   reply             TEXT,
-                                                   rating            INT DEFAULT 0 NOT NULL,
-                                                   is_public         BOOLEAN DEFAULT FALSE NOT NULL,
-                                                   is_seeded         BOOLEAN DEFAULT FALSE NOT NULL,
-                                                   created_at        DATETIME DEFAULT CURRENT_TIMESTAMP
+        this.pool.on('error', (error: Error) => {
+            throw new ServerError({
+                clientMessage: 'Unexpected database error',
+                cause: error,
+                operation: 'database:pool_error',
+            });
+        });
+    }
+
+    private async init(): Promise<void> {
+        const createTableText = `
+            CREATE TABLE IF NOT EXISTS public.reviews
+            (
+                id                text UNIQUE,
+                gig_id            text                    NOT NULL,
+                order_id          text                    NOT NULL,
+                target_id         text                    NOT NULL,
+                target_username   text                    NOT NULL,
+                target_picture    text,
+                reviewer_id       text                    NOT NULL,
+                reviewer_username text                    NOT NULL,
+                reviewer_picture  text,
+                review            text                    NOT NULL,
+                review_type       text                    NOT NULL,
+                reply             text,
+                rating            integer   DEFAULT 0     NOT NULL,
+                is_public         boolean   DEFAULT false NOT NULL,
+                is_seeded         boolean   DEFAULT false NOT NULL,
+                created_at        timestamp DEFAULT CURRENT_DATE,
+                PRIMARY KEY (id)
             );
+
+            CREATE INDEX IF NOT EXISTS gigId_idx ON public.reviews (gig_id);
+            CREATE INDEX IF NOT EXISTS targetId_idx ON public.reviews (target_id);
+            CREATE INDEX IF NOT EXISTS reviewerId_idx ON public.reviews (reviewer_id);
+            CREATE INDEX IF NOT EXISTS reviewerUsername_idx ON public.reviews (reviewer_username);
+            CREATE INDEX IF NOT EXISTS targetUsername_idx ON public.reviews (target_username);
         `;
 
-    const indexes = [
-      { name: 'gigId_idx', column: 'gig_id' },
-      { name: 'targetId_idx', column: 'target_id' },
-      { name: 'reviewerId_idx', column: 'reviewer_id' },
-      { name: 'reviewerUsername_idx', column: 'reviewer_username' },
-      { name: 'targetUsername_idx', column: 'target_username' },
-    ];
+        await this.pool.query(createTableText);
+        AppLogger.info('Review table and indexes ensured in PostgreSQL database.', {operation: 'database:init'});
+    }
 
-    const connection = await this.pool.getConnection();
-    try {
-      await connection.query(createTableSQL);
-      for (const { name, column } of indexes) {
+    public async connect(): Promise<void> {
         try {
-          await connection.query(`CREATE INDEX ${name} ON reviews (${column})`);
-        } catch (err: any) {
-          if (err.code !== 'ER_DUP_KEYNAME') throw err;
+            const client: PoolClient = await this.pool.connect();
+            AppLogger.info('Successfully connected to PostgreSQL database.', {operation: 'database:connect'});
+            client.release();
+            await this.init();
+        } catch (error) {
+            throw new ServerError({
+                clientMessage: 'Unable to connect to database',
+                cause: error,
+                operation: 'database:connect_error',
+            });
         }
-      }
-      AppLogger.info('Table "reviews" and indexes ensured in MySQL.', {
-        operation: 'database:init',
-      });
-    } finally {
-      connection.release();
     }
-  }
 
-  public async connect(): Promise<void> {
-    try {
-      const connection = await this.pool.getConnection();
-      AppLogger.info('Connected to MySQL database.', { operation: 'database:connect' });
-      connection.release();
-      await this.init();
-    } catch (error) {
-      throw new ServerError({
-        clientMessage: 'Unable to connect to database',
-        cause: error,
-        operation: 'database:connect_error',
-      });
+    public async close(): Promise<void> {
+        try {
+            await this.pool.end();
+            AppLogger.info('PostgreSQL database connection closed.', {operation: 'database:close'});
+        } catch (error) {
+            throw new ServerError({
+                clientMessage: 'Error while closing database connection',
+                cause: error,
+                operation: 'database:close_error',
+            });
+        }
     }
-  }
 
-  public async close(): Promise<void> {
-    try {
-      await this.pool.end();
-      AppLogger.info('MySQL database connection closed.', { operation: 'database:close' });
-    } catch (error) {
-      throw new ServerError({
-        clientMessage: 'Error while closing database connection',
-        cause: error,
-        operation: 'database:close_error',
-      });
+    public getPool(): Pool {
+        return this.pool;
     }
-  }
 
-  public getPool(): Pool {
-    return this.pool;
-  }
-
-  public async runTransaction<T>(callback: (connection: PoolConnection)=> Promise<T>): Promise<T> {
-    const connection = await this.pool.getConnection();
-    try {
-      await connection.beginTransaction();
-      const result = await callback(connection);
-      await connection.commit();
-      return result;
-    } catch (err) {
-      await connection.rollback();
-      throw err;
-    } finally {
-      connection.release();
+    public async runTransaction<T>(callback: (client: PoolClient) => Promise<T>): Promise<T> {
+        const client = await this.pool.connect();
+        try {
+            await client.query('BEGIN');
+            const result = await callback(client);
+            await client.query('COMMIT');
+            return result;
+        } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
+        } finally {
+            client.release();
+        }
     }
-  }
 }
 
 export const database = new Database();
